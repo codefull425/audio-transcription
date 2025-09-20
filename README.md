@@ -23,6 +23,7 @@ This project is a **Python** application that captures the computer's audio (via
   ```
 - Vosk speech recognition model (English or Portuguese).  
   Download at: [Vosk Models](https://alphacephei.com/vosk/models)
+  You can choose for any model at your preference
 
   Examples:
   - English: `vosk-model-small-en-us-0.15`
@@ -45,8 +46,8 @@ This project is a **Python** application that captures the computer's audio (via
 
 1. **Clone the repository** or copy the files.
    ```bash
-   git clone https://github.com/your-username/live-caption-generator.git
-   cd live-caption-generator
+   git clone https://github.com/codefull425/audio-transcription.git
+   cd audio-transcription
    ```
 
 2. **Install dependencies**
@@ -134,6 +135,7 @@ Este projeto é uma aplicação em **Python** que captura o áudio do computador
   ```
 - Modelo Vosk de reconhecimento de voz (ex. inglês ou português).  
   Baixe em: [Modelos Vosk](https://alphacephei.com/vosk/models)
+  Voce pode escolher o modelo da sua preferencia
 
   Exemplos:
   - Inglês: `vosk-model-small-en-us-0.15`
@@ -156,8 +158,8 @@ Este projeto é uma aplicação em **Python** que captura o áudio do computador
 
 1. **Clone o repositório** ou copie os arquivos.
    ```bash
-   git clone https://github.com/seu-usuario/live-caption-generator.git
-   cd live-caption-generator
+   git clone https://github.com/codefull425/audio-transcription.git
+   cd audio-transcription
    ```
 
 2. **Instale as dependências**
