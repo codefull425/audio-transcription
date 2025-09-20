@@ -1,23 +1,30 @@
+from collections import deque
+
 import numpy as np
-import tekore as tk
 import time
-import sys
 
 import pyaudiowpatch as pyaudio
-import time
-import wave
 
 import json
 from vosk import KaldiRecognizer, Model
+from captioner import CaptionAssembler
 
 MODEL_PATH = "models/vosk-model-small-en-us-0.15"
 CHUNK_SIZE = 2048  # Tamanho do buffer
 SAMPLE_FORMAT = pyaudio.paInt16
 SAMPLE_WIDTH = 2  # 16-bit = 2 bytes
-DURATION = 30  # tempo total de execução em segundos
+DURATION = 60  # tempo total de execução em segundos
+
+
+""" ------------------------------------------------------------------ """
+
+MAX_LINES = 2                   # 1–2 linhas
+MAX_CHARS_PER_LINE = 42         # ~42 por linha
+MIN_CAPTION_SEC = 1.5
+MAX_CAPTION_SEC = 6.0
+LINE_BREAK_TOKENS = {",", ".", "!", "?", ":", ";"}
+caps = CaptionAssembler("legenda.srt")
 def find_loopback_device():
-
-
     if 1:
         with pyaudio.PyAudio() as p:
             """
@@ -53,53 +60,85 @@ def find_loopback_device():
             print(f"Recording from: ({default_speakers['index']}){default_speakers['name']}")
             return default_speakers
 
-
+def to_mono_int16(raw, nch):
+    arr = np.frombuffer(raw, dtype=np.int16)
+    if nch > 1:
+        frames = arr.size // nch
+        tmp = arr[:frames*nch].reshape(frames, nch).astype(np.int32)
+        arr = tmp.mean(axis=1).astype(np.int16)
+    return arr.tobytes()
 
 def stream_and_transcribe():
     print("[INFO] Carregando modelo Vosk...")
+    step_ms = 30
+    loopback = find_loopback_device()
+    sample_rate = int(loopback["defaultSampleRate"])
+    frames_per_buffer = int(sample_rate * (step_ms / 1000.0))
     model = Model(MODEL_PATH)
-    recognizer = KaldiRecognizer(model, 44100)
+    
+    recognizer = KaldiRecognizer(model, sample_rate)
+    window_size = int( sample_rate * (300/1000.0)) #buffer 300ms
+    step_size = int( sample_rate * (150/1000.0)) #overlap 150ms
+    recognizer.SetWords(True)
+    channels=loopback["maxInputChannels"]
+                          # chunk de ~30ms
+      # ← habilita timestamps por PALAVRA
+
 
     p = pyaudio.PyAudio()
-    loopback = find_loopback_device()
 
     print(f"[INFO] Usando dispositivo: ({loopback['index']}) {loopback['name']}")
     stream = p.open(format=SAMPLE_FORMAT,
                     channels=loopback["maxInputChannels"],
-                    rate=int(loopback["defaultSampleRate"]),
+                    rate=sample_rate,
                     input=True,
                     input_device_index=loopback["index"],
-                    frames_per_buffer=CHUNK_SIZE)
+                    frames_per_buffer=frames_per_buffer)
+
+    ring = deque(maxlen=window_size)
 
     print("[INFO] Iniciando transcrição ao vivo... (Ctrl+C para parar)")
     start_time = time.time()
 
     try:
-        while time.time() - start_time < DURATION:
-            data = stream.read(CHUNK_SIZE, exception_on_overflow=False)
-            audio_data = np.frombuffer(data, dtype=np.int16)
+        while True:
+            data = stream.read(frames_per_buffer, exception_on_overflow=False)
+            mono = to_mono_int16(data, channels)
 
-            # Converte para mono, se necessário
-            if loopback["maxInputChannels"] > 1:
-                audio_data = np.mean(audio_data.reshape(-1, loopback["maxInputChannels"]), axis=1).astype(np.int16)
-
-            if recognizer.AcceptWaveform(audio_data.tobytes()):
+            if recognizer.AcceptWaveform(mono):
                 result = json.loads(recognizer.Result())
+                words = result.get("result", [])
+                if words:
+                    caps.add_words(words)
+
                 if result.get("text"):
                     print("[Transcrição]:", result["text"])
+
             else:
                 partial = json.loads(recognizer.PartialResult()).get("partial")
+
                 if partial:
                     print("[Parcial]:", partial)
+                        
 
     except KeyboardInterrupt:
         print("\n[INFO] Parado pelo usuário.")
     finally:
+        try:
+            final = json.loads(recognizer.FinalResult())
+            words = final.get("result", [])
+            if words:
+                caps.add_words(words)
+            if final.get("text"):
+                print("[Transcrição]:", final["text"])
+        except Exception:
+            pass
+        caps.finalize()
         stream.stop_stream()
         stream.close()
         p.terminate()
 
+
+
 if __name__ == "__main__":
-    if __name__ == "__main__":
-        find_loopback_device()
-        stream_and_transcribe()
+    stream_and_transcribe()
